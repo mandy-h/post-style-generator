@@ -1,11 +1,346 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Document</title>
-</head>
-<body>
-  Hello world
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Click Critters Post Style Generator</title>
+    <link
+      rel="stylesheet"
+      href="./style.css"
+    />
+  </head>
+  <body>
+    <!-- partial:index.partial.html -->
+    <div id="app"></div>
+
+    <script
+      type="text/x-template"
+      id="modal-template"
+    >
+      <div class="modal-backdrop" role="dialog">
+        <div class="modal" ref="modal">
+          <header class="modal-header">
+            <slot name="header"></slot>
+            <button type="button" @click="$emit('close')" style="margin-left: auto;">x</button>
+          </header>
+          <section class="modal-body">
+            <slot name="body"></slot>
+          </section>
+          <footer class="modal-footer">
+            <button type="button" @click="$emit('close')">Got It</button>
+            <slot name="footer"></slot>
+          </footer>
+        </div>
+      </div>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="image-input-template"
+    >
+      <label>
+        <span class="label-text"><slot>{{LABELS[cssProp]}}</slot></span>
+        <span v-if="isRequired">(required) </span>
+        <input
+          type="text"
+          :name="cssProp"
+          :required="isRequired"
+          :aria-invalid="!isValid"
+          v-model="value"
+        >
+        <strong class="inline-error" v-if="!isValid">
+          Please enter a valid image URL. It needs to start with http(s) and end with an image format. <br />Example: https://example.com/example.png
+        </strong>
+      </label>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="color-input-template"
+    >
+      <label>
+        <span class="label-text"><slot>{{LABELS[cssProp]}}</slot></span>
+        <input
+          type="text"
+          :name="cssProp"
+          :aria-invalid="!isValid"
+          v-model="value"
+        >
+        <strong class="inline-error" v-if="!isValid">Please enter color in hexadecimal (e.g. #000000, #000) or RGB (e.g. rgb(0,0,0)) format.</strong>
+      </label>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="number-input-template"
+    >
+      <label class="px-only">
+        <span class="label-text"><slot>{{LABELS[cssProp]}}</slot></span>
+        <input
+          type="number"
+          :min="min"
+          :max="max"
+          :name="cssProp"
+          :aria-invalid="!isValid"
+          v-model.number="value"
+        >
+          <strong class="inline-error" v-if="!isValid">Please enter an integer within the range of {{min}} and {{max}}.</strong>
+      </label>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="dropdown-input-template"
+    >
+      <label>
+        <span class="label-text"><slot>{{LABELS[cssProp]}}</slot></span>
+        <select
+          :value="value"
+          :name="cssProp"
+          @input="$emit('input', $event.target.value)"
+        >
+          <option v-if="emptyOption"></option>
+          <option v-for="(val, key) in options" :value="key">{{val}}</option>
+        </select>
+      </label>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="container-styles-template"
+    >
+      <fieldset>
+        <legend><slot></slot></legend>
+        <NumberInput
+          v-if="options.includes('width')"
+          :css-prop="'width'"
+          :max="500"
+        ></NumberInput>
+        <NumberInput
+          v-if="options.includes('height')"
+          :css-prop="'height'"
+          :max="300"
+        ></NumberInput>
+        <DropdownInput
+          v-if="options.includes('vertical-align') && selectedTemplate === 'image-right-table'"
+          :css-prop="'vertical-align'"
+          :options="verticalAlignOptions"
+        ></DropdownInput>
+        <ColorInput
+          v-if="options.includes('color')"
+          :css-prop="'color'"
+        ></ColorInput>
+        <NumberInput
+          v-if="options.includes('font-size')"
+          :css-prop="'font-size'"
+          :min="12"
+          :max="24"
+        ></NumberInput>
+        <div class="style-group" v-if="options.includes('background')">
+          <ColorInput :css-prop="'background-color'"></ColorInput>
+          <ImageUrlInput
+            :css-prop="'background-image'"
+            @validated="backgroundImage = $event"
+          ></ImageUrlInput>
+          <transition enter-active-class="flash">
+            <DropdownInput
+              :css-prop="'background-repeat'"
+              :options="backgroundRepeatOptions"
+              :emptyOption="true"
+              v-show="backgroundImage"
+            ></DropdownInput>
+          </transition>
+          <transition enter-active-class="flash">
+            <DropdownInput
+              :css-prop="'background-position'"
+              :options="backgroundPositionOptions"
+              :emptyOption="true"
+              v-show="backgroundImage"
+            ></DropdownInput>
+          </transition>
+          <transition enter-active-class="flash">
+            <label v-show="backgroundImage">
+              {{LABELS['background-attachment']}} <input name="background-attachment" type="checkbox" value="fixed">
+            </label>
+          </transition>
+        </div>
+        <div class="style-group" v-if="options.includes('border')">
+          <DropdownInput
+            :css-prop="'border-style'"
+            :options="borderStyleOptions"
+            :emptyOption="true"
+            v-model="borderStyle"
+          ></DropdownInput>
+          <transition enter-active-class="flash">
+            <NumberInput
+              :css-prop="'border-width'"
+              v-show="borderStyle"
+            ></NumberInput>
+          </transition>
+          <transition enter-active-class="flash">
+            <ColorInput
+              :css-prop="'border-color'"
+              v-show="borderStyle"
+            ></ColorInput>
+          </transition>
+        </div>
+        <div class="style-group" v-if="options.includes('padding')">
+          <NumberInput :css-prop="'padding-top'"></NumberInput>
+          <NumberInput :css-prop="'padding-right'"></NumberInput>
+          <NumberInput :css-prop="'padding-bottom'"></NumberInput>
+          <NumberInput :css-prop="'padding-left'"></NumberInput>
+        </div>
+        <div class="style-group" v-if="options.includes('margin')">
+          <NumberInput :css-prop="'margin-top'"></NumberInput>
+          <NumberInput :css-prop="'margin-right'" :min="-100"></NumberInput>
+          <NumberInput :css-prop="'margin-bottom'" :min="-100"></NumberInput>
+          <NumberInput :css-prop="'margin-left'" :min="-100"></NumberInput>
+        </div>
+      </fieldset>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="main-form-template"
+    >
+      <form id="main-form" class="u-inline-block" @submit="validateForm">
+        <DropdownInput
+          style="margin-right: 1.5625rem;"
+          :options="templateOptions"
+          v-model="selectedTemplate"
+        >
+          Template
+        </DropdownInput>
+        <label v-if="selectedTemplate !== 'image-right-table'">
+          Add outer container? <input type="checkbox" v-model="addOuterDiv">
+        </label>
+        <ImageUrlInput
+          id="image-url-field"
+          class="u-block"
+          v-if="selectedTemplate !== 'no-image'"
+          :isRequired="true"
+        >
+          Image URL
+        </ImageUrlInput>
+        <div class="l-style-fields">
+          <ContainerStyles
+            id="image-style-fields"
+            class="style-fields image-style-fields"
+            :options="imageStyleOptions"
+            :selectedTemplate="selectedTemplate"
+            v-if="selectedTemplate !== 'no-image'"
+          >
+            Image Style
+          </ContainerStyles>
+          <ContainerStyles
+            id="post-style-fields"
+            class="style-fields post-style-fields"
+            :options="postStyleOptions"
+            :selectedTemplate="selectedTemplate"
+          >
+            Post Container Style
+          </ContainerStyles>
+          <ContainerStyles
+            id="outer-style-fields"
+            class="style-fields outer-style-fields"
+            v-show="addOuterDiv"
+            :options="outerStyleOptions"
+            :selectedTemplate="selectedTemplate"
+          >
+            Outer Container Style
+          </ContainerStyles>
+        </div>
+      </form>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="html-output-template"
+    >
+      <div class="html-output">
+        <button form="main-form" class="u-block" style="margin-bottom: 3rem;">Generate HTML</button>
+        <textarea id="html-output" readonly="readonly" :value="output"></textarea>
+        <button class="u-block u-mt-10" type="button" @click="copyHtml">Copy HTML</button>
+      </div>
+    </script>
+
+    <script
+      type="text/x-template"
+      id="app-template"
+    >
+      <main>
+        <Modal v-if="showSplashModal" @close="showSplashModal = false">
+          <template v-slot:body>
+            <p>Hi! Before you start using this tool, here are some things to keep in mind.</p>
+            <ul>
+              <li><strong>You don't have to fill in every field.</strong> Any field that is omitted will inherit the site/browser default value.</li>
+              <li>You need to click on "Generate HTML" to update the view in the Appearance tab.</li>
+              <li><strong>The Appearance tab might not be an exact output of what the post style will look like on the forums.</strong> Check your post style on the forums after you've changed it.</li>
+            </ul>
+          </template>
+        </Modal>
+        <div class="tab-buttons" role="tablist">
+          <button
+            class="tab-button"
+            :class="{ active: activeTab === 'edit-tab' }"
+            type="button"
+            role="tab"
+            aria-controls="edit-tab"
+            :aria-selected="activeTab === 'edit-tab'"
+            @click="switchTab('edit-tab')"
+          >
+            Edit
+          </button><button
+            class="tab-button"
+            :class="{ active: activeTab === 'appearance-tab' }"
+            type="button"
+            role="tab"
+            aria-controls="appearance-tab"
+            :aria-selected="activeTab === 'appearance-tab'"
+            @click="switchTab('appearance-tab')"
+          >
+            Appearance
+          </button>
+        </div>
+        <div
+          id="edit-tab"
+          class="tab-content"
+          :class="{ active: activeTab === 'edit-tab' }"
+          role="tabpanel"
+          tabindex="0"
+        >
+          <div class="l-main">
+            <MainForm></MainForm>
+            <HtmlOutput
+              :selectedTemplate="selectedTemplate"
+              :addOuterDiv="addOuterDiv"
+            ></HtmlOutput>
+          </div>
+        </div>
+        <div
+          id="appearance-tab"
+          class="tab-content"
+          :class="{ active: activeTab === 'appearance-tab' }"
+          role="tabpanel"
+          tabindex="0"
+        >
+          <table cellpadding="0" cellspacing="0" style="border: 1px solid #000; width: 100%;">
+            <tr>
+              <td style="background: #004972; border-right: 1px solid #000; margin-right: 10px; width: 166px;"></td>
+              <td style="border-left: 1px solid #000; border-right: 1px solid #000; padding: 10px; vertical-align: top; width: 150px;">
+                <div style="background: #ddd; color: #888; height: 150px; width: 150px;">Avatar</div>
+              </td>
+              <td style="padding: 10px;">
+                <div class="preview" v-html="appearanceHtml"></div>
+                <hr style="width: 50%;" />
+                <div style="background-color: #ddd; color: #888; height: 150px; margin: auto; width: 500px;">Signature</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </main>
+    </script>
+    <!-- partial -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.11/vue.min.js"></script>
+    <script src="./script.js"></script>
+  </body>
 </html>
